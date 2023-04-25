@@ -83,8 +83,6 @@ varImpPlot(rf)
 ```
 
 
-
-
 ## Decision Trees to predict the secondary outcome
 ```{r}
 set.seed(2)
