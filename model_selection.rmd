@@ -1,1 +1,132 @@
+---
+title: "ML_project"
+author: "Karni Bedirian"
+date: "4/25/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+setwd("C:/Users/karni/OneDrive/Desktop/NYU grad/NYU Spring 2023 courses/ML in Public Health/Project")
+mydata <- read.csv("ML_data2.csv")
+```
+
+```{r}
+library(dplyr)
+library(tidyverse)
+library(MASS)
+library(tree)
+library(randomForest)
+
+mydata <- na.omit(mydata)
+mydata <- mydata %>%
+  dplyr::select(-c(time_since_treatment, time_at_risk, medication_sum,X))
+
+#factorize malaria_binary
+mydata$malaria_binary <- as.factor(mydata$malaria_binary)
+
+set.seed(42)
+sample <- sample(c(TRUE, FALSE), nrow(mydata), replace=TRUE, prob=c(0.8,0.2))
+mydata_train <- mydata[sample, ]
+mydata_test <- mydata[!sample, ]
+```
+
+## Decision Trees to predict the primary outcome
+```{r}
+#looking at the primary outcome using Decision Trees (with CV pruning))
+set.seed(2)
+mytree <- tree(event2 ~ sex+subcounty+age+dwelling+water+Anopheles_count, data = mydata_train)
+cv.mytree <- cv.tree(mytree)
+cv.df <- data.frame(size = cv.mytree$size, deviance = cv.mytree$dev)
+bestsize <- cv.mytree$size[which.min(cv.mytree$dev)] ##Get the best tree size (no. of leaf nodes)
+bestsize
+
+ggplot(cv.df, mapping = aes(x = size, y = deviance)) + 
+  geom_point(size = 3) + 
+  geom_line() +
+  geom_vline(xintercept = bestsize, col = "red") +
+  ggtitle("Gini Node Purity Selection")
+
+prune.mytree <- prune.tree(mytree, best = bestsize) #Prune the tree to this size
+plot(prune.mytree)
+text(prune.mytree)
+
+##compute training MSE
+yhat.train <- predict(prune.mytree, newdata = mydata_train)
+mean((yhat.train-mydata_train$event2)^2) #0.5274877
+
+##compute test MSE
+yhat.test <- predict(prune.mytree, newdata = mydata_test)
+mean((yhat.test-mydata_test$event2)^2) #0.8466941
+```
+
+## Random Forest to predict the primary outcome
+```{r}
+set.seed(1)
+rf <- randomForest(event2 ~ sex+subcounty+age+dwelling+water+Anopheles_count, 
+                       data = mydata_train, importance = TRUE)
+
+#compute training MSE
+yhat.rf.train <- predict(rf, newdata = mydata_train)
+mean((yhat.rf.train-mydata_train$event2)^2) #0.3087398
+
+#compute test MSE
+yhat.rf.test <- predict(rf, newdata = mydata_test)
+mean((yhat.rf.test-mydata_test$event2)^2) # 0.8136011
+
+importance(rf)
+varImpPlot(rf)
+```
+
+
+
+
+## Decision Trees to predict the secondary outcome
+```{r}
+set.seed(2)
+mytree.bin <- tree(malaria_binary ~ sex+subcounty+age+dwelling+water+Anopheles_count, data =  mydata_train)
+
+cv.tree <- cv.tree(mytree.bin)
+cv.df <- data.frame(size = cv.tree$size, deviance = cv.tree$dev)
+bestsize <- cv.tree$size[which.min(cv.tree$dev)] ##Get the best tree size (no. of leaf nodes)
+ggplot(cv.df, mapping = aes(x = size, y = deviance)) + 
+  geom_point(size = 3) + 
+  geom_line() +
+  geom_vline(xintercept = bestsize, col = "red") +
+  ggtitle("Gini Node Purity Selection")
+
+prune.mytree.bin <- prune.tree(mytree.bin, best = bestsize) ##Prune the tree to this size
+plot(prune.mytree.bin)
+text(prune.mytree.bin)
+
+##compute training classification error 
+yhat.train <- predict(prune.mytree.bin, newdata = mydata_train, type = "class")
+mean(yhat.train != mydata_train$malaria_binary)#0.1961302
+
+##compute test classification error 
+yhat.test <- predict(prune.mytree.bin, newdata = mydata_test, type = "class")
+mean(yhat.train != mydata_test$malaria_binary) #0.2225154
+```
+
+## Random Forest to predict the secondary outcome
+```{r}
+set.seed(1)
+rf <- randomForest(malaria_binary ~ sex+subcounty+age+dwelling+water+Anopheles_count, 
+                       data = mydata_train, importance = TRUE)
+
+#compute training classification error 
+yhat.rf.train <- predict(rf, newdata = mydata_train)
+mean(yhat.rf.train != mydata_train$malaria_binary) # 0.117854
+
+#compute test classification error 
+yhat.rf.test <- predict(rf, newdata = mydata_test)
+mean(yhat.rf.test != mydata_test$malaria_binary) #0.2316176
+
+importance(rf)
+varImpPlot(rf)
+```
 
