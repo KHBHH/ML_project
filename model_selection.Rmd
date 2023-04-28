@@ -2,7 +2,9 @@
 title: "ML_project"
 author: "Karni Bedirian"
 date: "4/25/2023"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -14,6 +16,20 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
 setwd("C:/Users/karni/OneDrive/Desktop/NYU grad/NYU Spring 2023 courses/ML in Public Health/Project")
 mydata <- read.csv("ML_data2.csv")
 ```
+
+**Introduction**
+
+**Related Work**
+
+**Methods**
+
+other non-parametric machine learning methods were used to predict the main and secondary outcomes; decision trees and Random Forests. Regression and classification decision Trees were applied as they easy to interpret, do not require mathematical formula for communication and they can be easily displayed graphically. They represent decisions of predictions as features in a tree-like structure. They consider all the possible features for prediction. The best feature to split the node on at each step is selected using the Gini Index, also known as node purity. To predict the primary outcome, the mean of the training observations is used in the region to which it belongs. To predict the secondary outcome, the prediction is based on the mode of these training observations.
+
+As trees do not generally have the great predictive accuracy and they suffer from high variance, ensemble methods such as Random Forest was also applied for regression and classification. Unlike Decision Trees, when splitting trees in Random Forests, a random sample of m predictors is selected as split candidates from a complete set of p predictors and then the split is allowed to use only one of those m predictors. 
+
+**Results** 
+
+After using Linear Regression, LDA, and KNN, decision trees and random forests were applied to predict the primary outcome. First a simple decision tree was constructed as shown in Figure x, where the variables that were actually used on construction were "age" and "Anopheles_count". This tree had 7 terminal nodes, and test prediction error of 0.88. To optimize the predictive performance on the test data, a smaller subset of tree was used by pruning the original tree. To prune the tree with an optimal size, cross validation was used to determine th optimal level of tree complexity (cost complexity pruning); the value of cost complexity parameter (a) that results with the lowest deviance (lowest sum of squared errors). The amount of nodes identified with this process resulting with the lowest deviance was 3. Therefore, the original tree was pruned to a size of 3, which was used to predict the test data resulting in a test prediction error of 0.85. However, the variables "subcounty" and "dwelling" are important risk factors other than "age" over the other variables, so the decision tree does not provide fully explainable information. Additionally, this decision tree resulted in a higher test prediction error rate compared to LDA, QDA, and KNN. Next, Random Forest was applied which resulted in a test prediction error rate of 0.85 as well. We also plotted two measures of variance importance using `varImpPlot` function. The first was based on the mean decrease of accuracy in predictions when a given variable is excluded from the model, and we saw that variables "age" and "subcounty" were the most relevant. The second plot was a measure of the total decrease in node purity that results from splits over that variable (averaged over all the trees in this regression problem). We saw that variables "age" and "Anopheles_count" were the most important the variables. These two measures showed "age" as an important variable, which overlapped with the method that performed the best in prediction the main outcome (Logistic Regression). However, the 1st variance importance plot showed "subcounty" as an important variable which was also significant using Logistic Regression, however the second plot of decrease in node purity showed "Anopheles_count" as an important variable, which was not statistically significant in Logistic Regression. Even though the Decision Tree and Random Forest did not show the best performance in predicting over the test data, but they gave insights to the important features related to predicting the outcome. 
 
 ```{r}
 library(dplyr)
@@ -35,11 +51,20 @@ mydata_train <- mydata[sample, ]
 mydata_test <- mydata[!sample, ]
 ```
 
-## Decision Trees to predict the primary outcome
+## Decision Trees to predict the main outcome
 ```{r}
 #looking at the primary outcome using Decision Trees (with CV pruning))
 set.seed(2)
-mytree <- tree(event2 ~ sex+subcounty+age+dwelling+water+Anopheles_count, data = mydata_train)
+mytree <- tree(event2 ~ sex+subcounty+age+dwelling+water+Anopheles_count+hwi, data = mydata_train)
+summary(mytree)
+
+plot(mytree)
+text(mytree)
+
+##compute test MSE
+yhat.test <- predict(mytree, newdata = mydata_test)
+mean((yhat.test-mydata_test$event2)^2) #0.8776845
+
 cv.mytree <- cv.tree(mytree)
 cv.df <- data.frame(size = cv.mytree$size, deviance = cv.mytree$dev)
 bestsize <- cv.mytree$size[which.min(cv.mytree$dev)] ##Get the best tree size (no. of leaf nodes)
@@ -49,9 +74,10 @@ ggplot(cv.df, mapping = aes(x = size, y = deviance)) +
   geom_point(size = 3) + 
   geom_line() +
   geom_vline(xintercept = bestsize, col = "red") +
-  ggtitle("Gini Node Purity Selection")
+  ggtitle("Cross Validation to select the optimal size of tree")
 
 prune.mytree <- prune.tree(mytree, best = bestsize) #Prune the tree to this size
+summary(prune.mytree)
 plot(prune.mytree)
 text(prune.mytree)
 
@@ -64,30 +90,39 @@ yhat.test <- predict(prune.mytree, newdata = mydata_test)
 mean((yhat.test-mydata_test$event2)^2) #0.8466941
 ```
 
-## Random Forest to predict the primary outcome
+## Random Forest to predict the main outcome
 ```{r}
 set.seed(1)
-rf <- randomForest(event2 ~ sex+subcounty+age+dwelling+water+Anopheles_count, 
+Radnom.Forest <- randomForest(event2 ~ sex+subcounty+age+dwelling+water+Anopheles_count+hwi, 
                        data = mydata_train, importance = TRUE)
 
 #compute training MSE
-yhat.rf.train <- predict(rf, newdata = mydata_train)
-mean((yhat.rf.train-mydata_train$event2)^2) #0.3087398
+yhat.rf.train <- predict(Radnom.Forest, newdata = mydata_train)
+mean((yhat.rf.train-mydata_train$event2)^2) #0.292316
 
 #compute test MSE
-yhat.rf.test <- predict(rf, newdata = mydata_test)
-mean((yhat.rf.test-mydata_test$event2)^2) # 0.8136011
+yhat.rf.test <- predict(Radnom.Forest, newdata = mydata_test)
+mean((yhat.rf.test-mydata_test$event2)^2) # 0.8214144
 
-importance(rf)
-varImpPlot(rf)
+importance(Radnom.Forest)
+varImpPlot(Radnom.Forest)
 ```
 
+
+
+After using Logistic Regression, LDA, QDA, and KNN, classification decision tree was used to predict the malaria infection. The classification tree resulted in a test prediction error rate of 22.8%. Next, cross validation and pruning processes were applied to test for improvement as we did in regression trees. The size of tree with the lowest deviance was 3, therefore the original tree was pruned to a size of 3. The pruned tree resulted in a test prediction error rate of 22.3%. Next, Random Forest was applied to predict 
 
 ## Decision Trees to predict the secondary outcome
 ```{r}
 set.seed(2)
-mytree.bin <- tree(malaria_binary ~ sex+subcounty+age+dwelling+water+Anopheles_count, data =  mydata_train)
+mytree.bin <- tree(malaria_binary ~ sex+subcounty+age+dwelling+water+Anopheles_count+hwi, data =  mydata_train)
+summary(mytree.bin)
+plot(mytree.bin)
+text(mytree.bin)
+yhat.test <- predict(mytree.bin, newdata = mydata_test, type = "class")
+mean(yhat.test != mydata_test$malaria_binary) #0.2279412
 
+#prunning the tree
 cv.tree <- cv.tree(mytree.bin)
 cv.df <- data.frame(size = cv.tree$size, deviance = cv.tree$dev)
 bestsize <- cv.tree$size[which.min(cv.tree$dev)] ##Get the best tree size (no. of leaf nodes)
@@ -98,6 +133,7 @@ ggplot(cv.df, mapping = aes(x = size, y = deviance)) +
   ggtitle("Gini Node Purity Selection")
 
 prune.mytree.bin <- prune.tree(mytree.bin, best = bestsize) ##Prune the tree to this size
+summary(prune.mytree.bin)
 plot(prune.mytree.bin)
 text(prune.mytree.bin)
 
@@ -107,24 +143,27 @@ mean(yhat.train != mydata_train$malaria_binary)#0.1961302
 
 ##compute test classification error 
 yhat.test <- predict(prune.mytree.bin, newdata = mydata_test, type = "class")
-mean(yhat.train != mydata_test$malaria_binary) #0.2225154
+mean(yhat.test != mydata_test$malaria_binary) #0.2225154
+
+roc_DT <- roc(mydata_test$malaria_binary, yhat.test)
+auc_DT <- auc(roc_DT)
 ```
 
 ## Random Forest to predict the secondary outcome
 ```{r}
 set.seed(1)
-rf <- randomForest(malaria_binary ~ sex+subcounty+age+dwelling+water+Anopheles_count, 
+Radnom.Forest <- randomForest(malaria_binary ~ sex+subcounty+age+dwelling+water+Anopheles_count+hwi, 
                        data = mydata_train, importance = TRUE)
 
 #compute training classification error 
-yhat.rf.train <- predict(rf, newdata = mydata_train)
+yhat.rf.train <- predict(Radnom.Forest, newdata = mydata_train)
 mean(yhat.rf.train != mydata_train$malaria_binary) # 0.117854
 
 #compute test classification error 
-yhat.rf.test <- predict(rf, newdata = mydata_test)
+yhat.rf.test <- predict(Radnom.Forest, newdata = mydata_test)
 mean(yhat.rf.test != mydata_test$malaria_binary) #0.2316176
 
-importance(rf)
-varImpPlot(rf)
+importance(Radnom.Forest)
+varImpPlot(Radnom.Forest)
 ```
 
